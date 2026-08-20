@@ -1,7 +1,18 @@
+#ENVIRONEMNT SECRETS- Never commit these
+.env
+backend/.env
+frontend/.env
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
+*.pyc
+venv/
+
+# Node
+node_modules/
+frontend/dist/
 
 # C extensions
 *.so
