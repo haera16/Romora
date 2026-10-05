@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { useNavigate } from 'react-router-dom'
 
 function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
+  const navigate = useNavigate()
 
   async function handleSignup(e) {
     e.preventDefault()
@@ -20,6 +22,7 @@ function Signup() {
       setMessage(error.message)
     } else {
       setMessage('Signup successful! Check your email to confirm.')
+      setTimeout(() => navigate('/login'), 3000)
     }
   }
 
