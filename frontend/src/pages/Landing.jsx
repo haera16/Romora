@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import HeroMatchStrip from "../components/HeroMatchStrip";
+import TrustStrip from "../components/TrustStrip";
+import HowItWorks from "../components/HowItWorks";
 
 function Landing() {
   return (
@@ -13,21 +15,21 @@ function Landing() {
             Connect with verified KIIT students who share your habits, vibe, and study
             schedule. No more awkward rooming situations.
           </p>
-          <div className="mt-8 flex items-center gap-4">
+          <div className="mt-8">
             <Link
               to="/signup"
-              className="rounded-full bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800"
+              className="inline-block rounded-full bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800"
             >
               Get started
-            </Link>
-            <Link to="/login" className="text-slate-700 underline">
-              Log in
             </Link>
           </div>
         </div>
 
         <HeroMatchStrip />
       </section>
+
+      <TrustStrip />
+      <HowItWorks />
     </div>
   );
 }
