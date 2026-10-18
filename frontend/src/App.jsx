@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Landing from './pages/Landing'
-import Signup from './pages/Signup'
-import Login from './pages/Login'
+import Auth from './pages/Auth'
 import CreateProfile from './pages/CreateProfile'
 
 function App() {
@@ -9,8 +8,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Auth />} />
+        <Route path="/login" element={<Auth />} />
         <Route path="/create-profile" element={<CreateProfile />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

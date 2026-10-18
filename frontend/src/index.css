@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+@theme {
+  --color-romora-50: #f0f9f3;
+  --color-romora-100: #def2e3;
+  --color-romora-200: #bfe4cb;
+  --color-romora-500: #2d6a44;
+  --color-romora-600: #245637;
+  --color-romora-700: #1b4129;
+  --color-romora-accent: #34c759;
+
+  --font-heading: "Plus Jakarta Sans", sans-serif;
+  --font-body: "Be Vietnam Pro", sans-serif;
+
+  --shadow-soft-card: 0 20px 45px -10px rgba(45, 106, 68, 0.08),
+    0 10px 20px -5px rgba(0, 0, 0, 0.03);
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+  }
+}
+
+/* Landing page diamond bob */
 @keyframes bob {
 
   0%,
@@ -14,4 +37,29 @@
 
 .diamond-bob {
   animation: bob 1.2s ease-in-out infinite;
+}
+
+/* 3D card flip */
+.perspective-1000 {
+  perspective: 1200px;
+}
+
+.card-flipper {
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+
+.card-flipper.flipped {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.card-face-back {
+  transform: rotateY(180deg);
 }
