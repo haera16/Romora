@@ -8,7 +8,6 @@ import IdUpload from "./IdUpload";
 const GENDERS = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
-  { value: "other", label: "Prefer not to say" },
 ];
 
 const STRENGTH_LABELS = ["Strength", "Weak", "Medium", "Strong"];
@@ -174,15 +173,15 @@ function SignUpForm() {
           {/* Gender */}
           <div>
             <span className={LABEL}>Gender</span>
-            <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-200/60 bg-slate-100/90 p-1">
+            <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200/60 bg-slate-100/90 p-1">
               {GENDERS.map((g) => (
                 <button
                   key={g.value}
                   type="button"
                   onClick={() => setGender(g.value)}
                   className={`truncate rounded-lg px-2 py-1.5 text-center font-heading text-xs font-semibold transition ${gender === g.value
-                      ? "bg-romora-500 text-white shadow-sm"
-                      : "text-slate-600 hover:text-slate-900"
+                    ? "bg-romora-500 text-white shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
                     }`}
                 >
                   {g.label}
