@@ -81,7 +81,7 @@ STUDENTS = [
     ("neel_bose", "Neel Bose", "male", 1, "CSE", "arjun",
      6000, 9000, "semi_furnished", "flexible", "veg", "two", "KIIT Square", "any",
      "First year gamer and coder. Open to sharing with anyone considerate."),
-    ("pooja_iyer", "Pooja Iyer", "female", 3, "Biotech", "tara",
+    ("pooja_iyer", "Pooja Iyer", "female", 3, "Biotech", "anika",
      7000, 11000, "semi_furnished", "within_month", "no_preference", "two", "Patia", "any",
      "Friendly and organised. Likes cooking together and movie nights."),
     ("sam_verma", "Sam Verma", "male", 2, "Mechanical", "kabir",

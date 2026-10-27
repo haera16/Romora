@@ -4,6 +4,7 @@ import Auth from './pages/Auth'
 import ResetPassword from './pages/ResetPassword'
 import CreateProfile from './pages/CreateProfile'
 import RequireAuth from './components/RequireAuth'
+import Explore from './pages/Explore'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/signup" element={<Auth />} />
         <Route path="/login" element={<Auth />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/explore" element={<Explore />} />
         <Route
           path="/create-profile"
           element={
