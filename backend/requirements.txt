@@ -4,3 +4,4 @@ supabase
 python-dotenv
 sentence-transformers
 pgvector
+uvicorn[standard]
