@@ -5,6 +5,7 @@ import ResetPassword from './pages/ResetPassword'
 import CreateProfile from './pages/CreateProfile'
 import RequireAuth from './components/RequireAuth'
 import Explore from './pages/Explore'
+import Messages from './pages/Messages'
 import ProfileGate from './components/ProfileGate'
 
 function App() {
@@ -30,6 +31,14 @@ function App() {
           element={
             <ProfileGate mode="needs-profile">
               <Explore />
+            </ProfileGate>
+          }
+        />
+        <Route
+          path="/messages"
+          element={
+            <ProfileGate mode="needs-profile">
+              <Messages />
             </ProfileGate>
           }
         />

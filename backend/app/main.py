@@ -5,13 +5,18 @@ Run from the backend folder with the virtual environment active:
     uvicorn app.main:app --reload --port 8000
 """
 
+import time
+from collections import defaultdict
+
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.live_matching import ask_groq, explain_rows, match_one
 from app.matching import sb
+from app import ocr_verification
 
 app = FastAPI(title="Romora API")
+app.include_router(ocr_verification.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +24,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# In-memory rate limit for match refreshes (resets when the server restarts)
+REFRESH_LIMIT = 3
+REFRESH_WINDOW = 60
+_refresh_hits = defaultdict(list)
+
+
+def _refresh_rate_limit(user_id: str):
+    now = time.time()
+    recent = [t for t in _refresh_hits[user_id] if now - t < REFRESH_WINDOW]
+    if len(recent) >= REFRESH_LIMIT:
+        _refresh_hits[user_id] = recent
+        raise HTTPException(
+            status_code=429, detail="Too many refreshes. Please wait a minute.")
+    recent.append(now)
+    _refresh_hits[user_id] = recent
 
 
 @app.get("/health")
@@ -38,6 +59,8 @@ def refresh_matches(background: BackgroundTasks, authorization: str = Header(def
         raise HTTPException(status_code=401, detail="Invalid token")
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    _refresh_rate_limit(user.id)
 
     found = sb.table("student_profiles").select("id").eq(
         "user_id", user.id).limit(1).execute().data

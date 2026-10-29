@@ -4,15 +4,15 @@ import { ChevronDown } from "lucide-react";
 const FAQS = [
   {
     q: "Why do I need to verify my KIIT ID?",
-    a: "To keep Romora limited to real KIIT students. Verification keeps matches reliable and the community safer.",
+    a: "To keep Romora limited to real KIIT students. At sign-up we read the roll number on your ID card and check that it matches your KIIT email. Your ID image is used only for this check and is not stored by Romora.",
   },
   {
     q: "Can I control who sees my profile?",
-    a: "Only verified KIIT students can see your profile, and you decide who to like and who gets your contact details.",
+    a: "Profiles are visible only to logged-in KIIT students. You choose who to say hello to, and you can only chat with people who said hello back. We never share phone numbers or email addresses.",
   },
   {
     q: "What happens if I report someone?",
-    a: "Every report is reviewed by an admin, and profiles that break the rules can be removed.",
+    a: "Your report is saved for an admin to review. If a profile is reported by three different students, it is hidden from Explore and Messages until an admin has looked at it.",
   },
 ];
 

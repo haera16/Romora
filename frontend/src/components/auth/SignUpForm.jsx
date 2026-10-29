@@ -5,6 +5,8 @@ import {
 import { supabase } from "../../supabaseClient";
 import IdUpload from "./IdUpload";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 const GENDERS = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
@@ -39,8 +41,9 @@ function SignUpForm() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState(""); // "", "verifying", "creating"
 
-  const isKiitEmail = email.trim().toLowerCase().endsWith("@kiit.ac.in");
+  const isKiitEmail = /^\d+@kiit\.ac\.in$/.test(email.trim().toLowerCase());
   const emailBad = emailTouched && email.length > 0 && !isKiitEmail;
   const strength = getStrength(password);
 
@@ -54,10 +57,42 @@ function SignUpForm() {
     if (!username.trim()) return setError("Please choose a username");
     if (!gender) return setError("Please choose a gender option");
     if (!idFile) return setError("Please upload your KIIT ID card");
+    if (!["image/jpeg", "image/png"].includes(idFile.type)) {
+      return setError("To verify your ID, please upload a JPG or PNG photo (not a PDF).");
+    }
 
     setLoading(true);
 
-    // TODO later: upload idFile to Supabase Storage for the OCR verification step
+    // Step 1: check the ID card against the email's roll number
+    try {
+      setStage("verifying");
+      const form = new FormData();
+      form.append("email", email.trim());
+      form.append("file", idFile);
+
+      const res = await fetch(`${API_URL}/verify-id-signup`, { method: "POST", body: form });
+      const out = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setLoading(false);
+        setStage("");
+        return setError(out.detail || "Could not verify your ID. Please try again.");
+      }
+      if (!out.verified) {
+        setLoading(false);
+        setStage("");
+        return setError(
+          "We could not match the roll number on your ID with your email. Upload a clear, well-lit photo of your own KIIT ID."
+        );
+      }
+    } catch {
+      setLoading(false);
+      setStage("");
+      return setError("Could not reach the verification service. Please try again in a moment.");
+    }
+
+    // Step 2: ID matched, so create the account
+    setStage("creating");
     const { error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
@@ -65,10 +100,14 @@ function SignUpForm() {
     });
 
     setLoading(false);
+    setStage("");
 
     if (signUpError) setError(signUpError.message);
-    else setMessage("Account created! Check your KIIT email to confirm it, then log in.");
+    else setMessage("ID verified. Account created! Check your KIIT email to confirm it, then log in.");
   }
+
+  const buttonText =
+    stage === "verifying" ? "Verifying your ID..." : stage === "creating" ? "Creating account..." : "Create account";
 
   return (
     <>
@@ -208,7 +247,7 @@ function SignUpForm() {
               disabled={loading}
               className="flex w-full items-center justify-center gap-2 rounded-full bg-romora-500 px-5 py-3 font-heading text-sm font-bold text-white shadow-md transition hover:bg-romora-600 disabled:opacity-60"
             >
-              {loading ? "Creating account..." : "Create account"}
+              {buttonText}
               {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
 

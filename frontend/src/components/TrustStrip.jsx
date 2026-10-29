@@ -1,9 +1,9 @@
 import { Mail, ShieldCheck, Bell } from "lucide-react";
 
 const ITEMS = [
-  { icon: Mail, title: "KIIT email verified", text: "Access restricted to students" },
-  { icon: ShieldCheck, title: "ID checked", text: "Profiles reviewed before going live" },
-  { icon: Bell, title: "Report anytime", text: "Every report is reviewed by our team" },
+  { icon: Mail, title: "KIIT email only", text: "Sign-up needs a KIIT email address" },
+  { icon: ShieldCheck, title: "ID checked at sign-up", text: "Your ID roll number must match your email" },
+  { icon: Bell, title: "Report anytime", text: "Repeated reports hide a profile automatically" },
 ];
 
 function TrustStrip() {

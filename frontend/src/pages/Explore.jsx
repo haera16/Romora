@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Search, GraduationCap, Wallet, MapPin, Sparkles, ChevronDown, Heart, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Search, GraduationCap, Wallet, MapPin, Sparkles, ChevronDown, Heart, X, BadgeCheck } from 'lucide-react'
 import { supabase } from '../supabaseClient' // change to `import supabase from ...` if yours is a default export
 import diamond from '../assets/romora_diamond.svg'
 import ProfileMenu from '../components/ProfileMenu'
 import { refreshMyMatches } from '../lib/api'
-import IdVerify from "../components/IdVerify";
 
 // Every SVG in src/assets/avatars, keyed by file name: { rohan: '/src/assets/avatars/rohan.svg', ... }
 const AVATARS = Object.fromEntries(
@@ -107,7 +107,7 @@ function Avatar({ person, size = 'h-20 w-20 rounded-2xl' }) {
   )
 }
 
-function Card({ row, sent, likesYou, onHello, top }) {
+function Card({ row, sent, likesYou, mutual, onHello, onMessage, top, verified }) {
   const [open, setOpen] = useState(false)
   const { person, prefs, score, why, reasons } = row
   const { bars, chips } = parseReasons(reasons)
@@ -119,6 +119,12 @@ function Card({ row, sent, likesYou, onHello, top }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-xl font-extrabold tracking-tight text-[#121e18]">{person.full_name}</h3>
+            {/* Badge shows only when this person's roll number passed ID verification at sign-up */}
+            {verified && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#EAFBF2] px-2.5 py-0.5 text-xs font-bold text-[#006d3b]">
+                <BadgeCheck size={14} /> Verified
+              </span>
+            )}
             {top && <span className="rounded-full bg-[#006d3b] px-3 py-0.5 text-xs font-bold text-white">★ Top match</span>}
             {likesYou && (
               <span className="inline-flex items-center gap-1 rounded-full bg-[#f3df9d] px-3 py-0.5 text-xs font-bold text-[#70622c]">
@@ -175,23 +181,34 @@ function Card({ row, sent, likesYou, onHello, top }) {
             </button>
           )}
         </div>
-        <button
-          onClick={onHello}
-          disabled={sent}
-          className="rounded-full bg-[#006d3b] px-7 py-2.5 text-sm font-bold text-white shadow-md shadow-[#006d3b]/10 transition hover:scale-105 active:scale-95 disabled:scale-100 disabled:bg-[#deece2] disabled:text-[#3d4a3f] disabled:shadow-none"
-        >
-          {sent ? 'Hello sent' : likesYou ? 'Say hello back' : 'Say hello'}
-        </button>
+        {mutual ? (
+          <button
+            onClick={onMessage}
+            className="rounded-full bg-[#006d3b] px-7 py-2.5 text-sm font-bold text-white shadow-md shadow-[#006d3b]/10 transition hover:scale-105 active:scale-95"
+          >
+            Message
+          </button>
+        ) : (
+          <button
+            onClick={onHello}
+            disabled={sent}
+            className="rounded-full bg-[#006d3b] px-7 py-2.5 text-sm font-bold text-white shadow-md shadow-[#006d3b]/10 transition hover:scale-105 active:scale-95 disabled:scale-100 disabled:bg-[#deece2] disabled:text-[#3d4a3f] disabled:shadow-none"
+          >
+            {sent ? 'Hello sent' : likesYou ? 'Say hello back' : 'Say hello'}
+          </button>
+        )}
       </div>
     </article>
   )
 }
 
+// roll_number is selected so the card can check it against the verified list
 const SELECT = `id, match_score, match_reasons, ai_explanation,
-  a:student_profiles!profile_a_id(id, full_name, branch, year_of_study, avatar_seed, preferences(*)),
-  b:student_profiles!profile_b_id(id, full_name, branch, year_of_study, avatar_seed, preferences(*))`
+  a:student_profiles!profile_a_id(id, roll_number, full_name, branch, year_of_study, avatar_seed, preferences(*)),
+  b:student_profiles!profile_b_id(id, roll_number, full_name, branch, year_of_study, avatar_seed, preferences(*))`
 
 export default function Explore() {
+  const navigate = useNavigate()
   const [me, setMe] = useState(null)
   const [rows, setRows] = useState([])
   const [sent, setSent] = useState(new Set())
@@ -206,6 +223,11 @@ export default function Explore() {
   const [food, setFood] = useState('all')
   const [view, setView] = useState('best')
   const [others, setOthers] = useState([])
+  const [verifiedRolls, setVerifiedRolls] = useState(new Set()) // roll numbers that passed ID verification
+
+  // Latest "sent" set for the realtime handler below (avoids a stale closure)
+  const sentRef = useRef(sent)
+  useEffect(() => { sentRef.current = sent }, [sent])
 
   useEffect(() => {
     let ignore = false
@@ -215,13 +237,17 @@ export default function Explore() {
       const { data: mine, error: e1 } = await supabase.from('student_profiles').select('id, full_name, avatar_seed, gender, preferences(*)').eq('user_id', user.id).maybeSingle()
       if (e1 || !mine) { setError('Create your profile first to see matches.'); setStatus('error'); return }
 
-      const [m, l, o] = await Promise.all([
+      const [m, l, o, v, h] = await Promise.all([
         supabase.from('matches').select(SELECT).or(`profile_a_id.eq.${mine.id},profile_b_id.eq.${mine.id}`),
         supabase.from('likes').select('liker_profile_id, liked_profile_id').or(`liker_profile_id.eq.${mine.id},liked_profile_id.eq.${mine.id}`),
-        supabase.from('student_profiles').select('id, full_name, branch, year_of_study, avatar_seed, gender, preferences(*)').neq('id', mine.id),
+        supabase.from('student_profiles').select('id, roll_number, full_name, branch, year_of_study, avatar_seed, gender, preferences(*)').neq('id', mine.id),
+        supabase.from('verified_ids').select('roll_number'),
+        supabase.from('hidden_profiles').select('profile_id'), // profiles hidden after repeated reports
       ])
       if (ignore) return
       if (m.error) { setError(m.error.message); setStatus('error'); return }
+
+      const hidden = new Set((h.data || []).map((x) => x.profile_id))
 
       // No stored matches yet (new profile)? Ask the backend to score this user now, then read again.
       let matchData = m.data
@@ -235,16 +261,17 @@ export default function Explore() {
         const person = r.a?.id === mine.id ? r.b : r.a
         const p = Array.isArray(person?.preferences) ? person.preferences[0] : person?.preferences
         return { id: r.id, person, prefs: p || {}, score: toPct(r.match_score), why: r.ai_explanation, reasons: r.match_reasons }
-      }).filter((r) => r.person).sort((x, y) => y.score - x.score)
+      }).filter((r) => r.person && !hidden.has(r.person.id)).sort((x, y) => y.score - x.score)
 
       const likes = l.data || []
       const matched = new Set(list.map((r) => r.person.id))
-      setOthers((o.data || []).filter((p) => !matched.has(p.id)).map((p) => ({
+      setOthers((o.data || []).filter((p) => !matched.has(p.id) && !hidden.has(p.id)).map((p) => ({
         id: `p-${p.id}`, person: p, score: null,
         prefs: (Array.isArray(p.preferences) ? p.preferences[0] : p.preferences) || {},
       })))
       const mp = Array.isArray(mine.preferences) ? mine.preferences[0] : mine.preferences
       if (mp?.budget_max) { setMyBudget({ min: mp.budget_min, max: mp.budget_max }); setMaxBudget(mp.budget_max) }
+      setVerifiedRolls(new Set((v.data || []).map((x) => String(x.roll_number).toUpperCase())))
       setMe(mine)
       setRows(list)
       setSent(new Set(likes.filter((x) => x.liker_profile_id === mine.id).map((x) => x.liked_profile_id)))
@@ -254,6 +281,27 @@ export default function Explore() {
     load()
     return () => { ignore = true }
   }, [])
+
+  // Live: when someone likes me, update instantly. If I had already liked them, it's a match.
+  useEffect(() => {
+    if (!me) return
+    const channel = supabase
+      .channel('explore-likes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, async ({ new: like }) => {
+        if (like.liked_profile_id !== me.id) return
+        setReceived((prev) => new Set(prev).add(like.liker_profile_id))
+        if (sentRef.current.has(like.liker_profile_id)) {
+          const { data } = await supabase
+            .from('student_profiles')
+            .select('id, full_name, avatar_seed')
+            .eq('id', like.liker_profile_id)
+            .maybeSingle()
+          if (data) setMutual(data)
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [me])
 
   // Explanations are written a few seconds after scores; pick them up as they arrive
   useEffect(() => {
@@ -299,11 +347,7 @@ export default function Explore() {
   const byScore = (a, b) => (b.score ?? -1) - (a.score ?? -1) || a.person.full_name.localeCompare(b.person.full_name)
   const noStored = rows.length === 0
   const bestList = (noStored ? estimated.filter((r) => r.score != null) : [...adjusted]).sort(byScore)
-  const pool = view === 'everyone'
-    ? [...adjusted, ...estimated].sort(byScore)
-    : view === 'mutual'
-      ? [...adjusted, ...estimated].filter((r) => sent.has(r.person.id) && received.has(r.person.id))
-      : bestList
+  const pool = view === 'everyone' ? [...adjusted, ...estimated].sort(byScore) : bestList
   const shown = pool.filter((r) => {
     const text = `${r.person.full_name} ${r.person.branch} ${r.prefs.preferred_locality || ''}`.toLowerCase()
     return text.includes(q.toLowerCase())
@@ -323,12 +367,8 @@ export default function Explore() {
           <img src={diamond} alt="" className="h-7 w-4" />
           <span className="text-xl font-black tracking-tight text-[#006d3b]">Romora</span>
           <nav className="ml-8 flex gap-6 text-sm font-bold">
-            {[['best', 'Explore'], ['mutual', 'Matches']].map(([k, l]) => {
-              const active = k === 'mutual' ? view === 'mutual' : view !== 'mutual'
-              return (
-                <button key={k} onClick={() => setView(k)} className={`pb-1 ${active ? 'border-b-2 border-[#006d3b] text-[#006d3b]' : 'text-[#3d4a3f] hover:text-[#121e18]'}`}>{l}</button>
-              )
-            })}
+            <button className="border-b-2 border-[#006d3b] pb-1 text-[#006d3b]">Explore</button>
+            <button onClick={() => navigate('/messages')} className="pb-1 text-[#3d4a3f] hover:text-[#121e18]">Messages</button>
           </nav>
           <div className="ml-auto">{me && <ProfileMenu avatarSrc={AVATARS[me.avatar_seed]} name={me.full_name} />}</div>
         </div>
@@ -369,13 +409,11 @@ export default function Explore() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, branch or locality" className="w-full rounded-2xl border border-[#bccabc]/40 bg-white py-3.5 pl-13 pr-5 font-semibold outline-none placeholder:text-[#3d4a3f]/50 focus:border-[#006d3b] focus:ring-2 focus:ring-[#006d3b]/20" style={{ paddingLeft: '3.25rem' }} />
           </div>
 
-          {view !== 'mutual' && (
-            <div className="mt-6 flex gap-8 border-b border-[#bccabc]/30">
-              {[['best', 'Best match'], ['everyone', 'Everyone']].map(([k, l]) => (
-                <button key={k} onClick={() => setView(k)} className={`-mb-px pb-3 font-bold ${view === k ? 'border-b-2 border-[#006d3b] text-[#006d3b]' : 'text-[#3d4a3f] hover:text-[#121e18]'}`}>{l}</button>
-              ))}
-            </div>
-          )}
+          <div className="mt-6 flex gap-8 border-b border-[#bccabc]/30">
+            {[['best', 'Best match'], ['everyone', 'Everyone']].map(([k, l]) => (
+              <button key={k} onClick={() => setView(k)} className={`-mb-px pb-3 font-bold ${view === k ? 'border-b-2 border-[#006d3b] text-[#006d3b]' : 'text-[#3d4a3f] hover:text-[#121e18]'}`}>{l}</button>
+            ))}
+          </div>
 
           {status === 'ready' && (
             <div className="mt-5 rounded-2xl border border-[#006d3b]/10 bg-[#EAFBF2] px-5 py-4 text-[15px] font-semibold text-[#3d4a3f]">
@@ -390,10 +428,20 @@ export default function Explore() {
             {status === 'loading' && <p className="py-16 text-center font-semibold text-[#3d4a3f]">Finding your matches…</p>}
             {status === 'error' && <p className="rounded-2xl bg-[#ffdad6] p-5 font-semibold text-[#93000a]">{error}</p>}
             {status === 'ready' && shown.length === 0 && (
-              <p className="py-16 text-center font-semibold text-[#3d4a3f]">{view === 'mutual' ? 'No mutual matches yet. Say hello to someone who already liked you.' : 'No one fits these filters. Try raising your budget or resetting them.'}</p>
+              <p className="py-16 text-center font-semibold text-[#3d4a3f]">No one fits these filters. Try raising your budget or resetting them.</p>
             )}
             {shown.map((r, i) => (
-              <Card key={r.id} row={r} top={view === 'best' && i === 0 && r.score != null} sent={sent.has(r.person.id)} likesYou={received.has(r.person.id)} onHello={() => sayHello(r)} />
+              <Card
+                key={r.id}
+                row={r}
+                top={view === 'best' && i === 0 && r.score != null}
+                sent={sent.has(r.person.id)}
+                likesYou={received.has(r.person.id)}
+                mutual={sent.has(r.person.id) && received.has(r.person.id)}
+                verified={verifiedRolls.has(String(r.person.roll_number || '').toUpperCase())}
+                onHello={() => sayHello(r)}
+                onMessage={() => navigate('/messages')}
+              />
             ))}
           </div>
         </section>
@@ -407,7 +455,10 @@ export default function Explore() {
             <img src={diamond} alt="" className="mx-auto mt-5 h-10 w-6" />
             <h2 className="mt-3 text-2xl font-extrabold">It's a match!</h2>
             <p className="mt-1 font-semibold text-[#3d4a3f]">You and {mutual.full_name} said hello to each other.</p>
-            <button onClick={() => setMutual(null)} className="mt-6 rounded-full bg-[#006d3b] px-8 py-2.5 font-bold text-white">Keep exploring</button>
+            <div className="mt-6 flex justify-center gap-3">
+              <button onClick={() => { setMutual(null); navigate('/messages') }} className="rounded-full bg-[#006d3b] px-6 py-2.5 font-bold text-white">Send a message</button>
+              <button onClick={() => setMutual(null)} className="rounded-full bg-[#deece2] px-6 py-2.5 font-bold text-[#3d4a3f]">Later</button>
+            </div>
           </div>
         </div>
       )}

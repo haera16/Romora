@@ -1,6 +1,15 @@
 import { Zap, Sparkles, ChevronDown, BadgeCheck } from "lucide-react";
 
-function MatchCard({ name, avatar, match, tagline, subtitle, summary, tags }) {
+function MatchCard({
+  name,
+  avatar,
+  match,
+  tagline,
+  subtitle,
+  summary,
+  tags,
+  verified = false,
+}) {
   return (
     <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
       <div className="flex items-start justify-between">
@@ -10,7 +19,9 @@ function MatchCard({ name, avatar, match, tagline, subtitle, summary, tags }) {
             alt=""
             className="h-20 w-20 rounded-xl bg-sky-100 object-cover object-top"
           />
-          <BadgeCheck className="absolute -bottom-2 -right-2 h-6 w-6 rounded-full bg-white text-green-600" />
+          {verified && (
+            <BadgeCheck className="absolute -bottom-2 -right-2 h-6 w-6 rounded-full bg-white text-green-600" />
+          )}
         </div>
 
         <div className="text-right">

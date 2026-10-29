@@ -1,8 +1,8 @@
-// DEMO NUMBERS: replace these with real counts before you present or deploy.
+// These are facts about how Romora works, not user counts, so they stay true on any day.
 const STATS = [
-  { value: "1,200+", label: "Active seekers", text: "Looking for a home right now" },
-  { value: "450+", label: "Verified listings", text: "All student-approved rooms" },
-  { value: "800+", label: "Matches made", text: "Connections created this semester" },
+  { value: "KIIT only", label: "Closed community", text: "Sign-up needs a KIIT email and a matching ID card" },
+  { value: "Live", label: "Match scores", text: "Scores update as you change your budget" },
+  { value: "Real-time", label: "Messages", text: "Chat opens once you both say hello" },
 ];
 
 function StatsRow() {

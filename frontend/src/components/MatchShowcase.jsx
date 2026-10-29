@@ -2,18 +2,21 @@ import { Check } from "lucide-react";
 import MatchCard from "./MatchCard";
 import rohan from "../assets/avatars/rohan.svg";
 
-const POINTS = ["Compatibility deep-dive", "Reasons behind every match"];
+const POINTS = [
+  "A plain-English reason for every match",
+  "Scores update live as you change your budget",
+];
 
 function MatchShowcase() {
   return (
     <section className="bg-slate-100 py-20">
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 md:grid-cols-2">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900">Science-backed matching.</h2>
+          <h2 className="text-3xl font-bold text-slate-900">Matching that shows its work.</h2>
           <p className="mt-4 max-w-md text-slate-600">
-            Our Match-O-Meter does not just look at budgets. It compares noise tolerance,
-            cleanliness, sleep schedule and social energy to find people you will actually
-            live well with.
+            Romora compares your budget, move-in timing, food preference, furnishing
+            and locality with every other student, ranks the people who fit, and
+            explains each match in plain words.
           </p>
 
           <ul className="mt-6 space-y-3">
@@ -28,16 +31,17 @@ function MatchShowcase() {
           </ul>
         </div>
 
-        <div className="flex justify-center md:justify-end">
+        <div className="flex flex-col items-center gap-2 md:items-end">
           <MatchCard
             name="Rohan Rai"
             avatar={rohan}
             match={98}
-            tagline="Quiet & Focused"
+            tagline="Strong fit on budget and move-in"
             subtitle="Computer Science, Year 3 • Patia"
-            summary="Rohan shares your love for morning coffee runs and late-night coding sessions. He prefers a quiet environment after 10 PM, just like you!"
-            tags={["Early Bird", "Loves Cats", "+3 more"]}
+            summary="You both want a semi-furnished place in Patia, prefer veg food and can move in within a month. Your budgets overlap comfortably."
+            tags={["Veg", "Semi-furnished", "Within a month"]}
           />
+          <p className="text-xs text-slate-500">Example match card</p>
         </div>
       </div>
     </section>
