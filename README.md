@@ -132,4 +132,4 @@ This creates `demo01@kiit.ac.in` to `demo16@kiit.ac.in` with the password from `
 
 ## Author
 
-Ash, B.Tech Computer Science and Engineering, KIIT University.
+Ashmita, B.Tech Computer Science and Engineering, KIIT University.
