@@ -1,8 +1,7 @@
 fastapi
-uvicorn
+uvicorn[standard]
 supabase
 python-dotenv
-sentence-transformers
-pgvector
-uvicorn[standard]
+httpx
+python-multipart
 fastembed

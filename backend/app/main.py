@@ -5,9 +5,11 @@ Run from the backend folder with the virtual environment active:
     uvicorn app.main:app --reload --port 8000
 """
 
+import os
 import time
 from collections import defaultdict
 
+from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,12 +17,19 @@ from app.live_matching import ask_groq, explain_rows, match_one
 from app.matching import sb
 from app import ocr_verification
 
+load_dotenv()
+
 app = FastAPI(title="Romora API")
 app.include_router(ocr_verification.router)
 
+# Local dev is always allowed; production sites come from FRONTEND_URL (comma-separated, no trailing slash)
+ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+ORIGINS += [u.strip().rstrip("/")
+            for u in os.getenv("FRONTEND_URL", "").split(",") if u.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
