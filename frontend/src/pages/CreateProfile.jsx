@@ -49,8 +49,8 @@ function Chips({ label, options, value, onChange, cols = 3 }) {
             aria-pressed={value === v}
             onClick={() => onChange(v)}
             className={`rounded-xl border px-2 py-2.5 text-sm font-semibold transition ${value === v
-                ? 'border-[#2D6A44] bg-[#2D6A44] text-white shadow-sm'
-                : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-[#2D6A44]/50'
+              ? 'border-[#2D6A44] bg-[#2D6A44] text-white shadow-sm'
+              : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-[#2D6A44]/50'
               }`}
           >
             {text}
@@ -156,7 +156,7 @@ function CreateProfile() {
         roll_number: toTextOrNull(form.roll_number),
         bio_raw: toTextOrNull(form.bio_raw),
       })
-      .select()
+      .select('id') // CHANGED: only ask for the id, because roll_number is hidden from the browser
       .single()
 
     if (profileError) {

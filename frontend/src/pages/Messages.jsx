@@ -30,23 +30,26 @@ export default function Messages() {
   const [me, setMe] = useState(null)
   const [partners, setPartners] = useState([]) // mutual matches, as profile rows
   const [last, setLast] = useState({}) // partner id -> latest message
-  const [verifiedRolls, setVerifiedRolls] = useState(new Set())
   const [activeId, setActiveId] = useState(null)
   const [status, setStatus] = useState('loading')
 
-  // Mutual likes = people I liked who also liked me
+  // Mutual likes = people I liked who also liked me (minus profiles hidden after repeated reports)
   const loadPartners = useCallback(async (myId) => {
-    const { data: likes } = await supabase
-      .from('likes')
-      .select('liker_profile_id, liked_profile_id')
-      .or(`liker_profile_id.eq.${myId},liked_profile_id.eq.${myId}`)
+    const [{ data: likes }, { data: hiddenRows }] = await Promise.all([
+      supabase
+        .from('likes')
+        .select('liker_profile_id, liked_profile_id')
+        .or(`liker_profile_id.eq.${myId},liked_profile_id.eq.${myId}`),
+      supabase.from('hidden_profiles').select('profile_id'),
+    ])
+    const hidden = new Set((hiddenRows || []).map((x) => x.profile_id))
     const sent = new Set((likes || []).filter((x) => x.liker_profile_id === myId).map((x) => x.liked_profile_id))
     const received = new Set((likes || []).filter((x) => x.liked_profile_id === myId).map((x) => x.liker_profile_id))
-    const ids = [...sent].filter((id) => received.has(id))
+    const ids = [...sent].filter((id) => received.has(id) && !hidden.has(id))
     if (!ids.length) { setPartners([]); return }
     const { data: profiles } = await supabase
       .from('student_profiles')
-      .select('id, roll_number, full_name, branch, year_of_study, avatar_seed')
+      .select('id, is_verified, full_name, branch, year_of_study, avatar_seed')
       .in('id', ids)
     setPartners(profiles || [])
   }, [])
@@ -59,12 +62,9 @@ export default function Messages() {
       const { data: mine } = await supabase.from('student_profiles').select('id, full_name, avatar_seed').eq('user_id', user.id).maybeSingle()
       if (!mine) { setStatus('error'); return }
 
-      const [msgs, v] = await Promise.all([
-        supabase.from('messages').select('*')
-          .or(`sender_profile_id.eq.${mine.id},recipient_profile_id.eq.${mine.id}`)
-          .order('created_at', { ascending: false }).limit(500),
-        supabase.from('verified_ids').select('roll_number'),
-      ])
+      const msgs = await supabase.from('messages').select('*')
+        .or(`sender_profile_id.eq.${mine.id},recipient_profile_id.eq.${mine.id}`)
+        .order('created_at', { ascending: false }).limit(500)
       if (ignore) return
 
       const latest = {}
@@ -73,7 +73,6 @@ export default function Messages() {
         if (!latest[other]) latest[other] = m // rows are newest first
       }
       setLast(latest)
-      setVerifiedRolls(new Set((v.data || []).map((x) => String(x.roll_number).toUpperCase())))
       await loadPartners(mine.id)
       if (ignore) return
       setMe(mine)
@@ -152,7 +151,7 @@ export default function Messages() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="truncate font-extrabold">{p.full_name}</span>
-                            {verifiedRolls.has(String(p.roll_number || '').toUpperCase()) && <BadgeCheck size={14} className="shrink-0 text-[#006d3b]" />}
+                            {p.is_verified && <BadgeCheck size={14} className="shrink-0 text-[#006d3b]" />}
                           </div>
                           <p className="truncate text-sm font-semibold text-[#3d4a3f]/80">
                             {m ? `${mine ? 'You: ' : ''}${m.body}` : 'Say hi to start the chat'}

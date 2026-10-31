@@ -9,6 +9,7 @@ profile's rows in `matches`. Used by the API so a new user gets results instantl
 import time
 from datetime import datetime, timezone
 
+from app.embeddings import embed
 from app.matching import hard_filter, score_pair, sb
 
 try:  # explanations need GROQ_API_KEY; the API still works without it
@@ -17,10 +18,13 @@ except SystemExit as exc:
     ask_groq = build_prompt = None
     print(f"AI explanations disabled: {exc}")
 
+# Load the embedding model now so the first request is not slow
+embed("warm up")
+
 
 def match_one(profile_id: str) -> list[dict]:
     profiles = sb.table("student_profiles").select(
-        "id, full_name, username, gender, year_of_study, branch"
+        "id, full_name, username, gender, year_of_study, branch, bio_raw"
     ).execute().data
     prefs = {p["profile_id"]: p for p in sb.table(
         "preferences").select("*").execute().data}

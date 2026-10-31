@@ -58,6 +58,12 @@ function Auth() {
             {showLogin ? "Sign up" : "Log in"}
           </button>
         </p>
+
+        <p className="mt-2 w-full max-w-[440px] text-right text-xs text-slate-400">
+          <Link to="/privacy" className="underline hover:text-slate-600">
+            Privacy notice
+          </Link>
+        </p>
       </main>
     </div>
   );

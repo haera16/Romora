@@ -6,6 +6,7 @@ import CreateProfile from './pages/CreateProfile'
 import RequireAuth from './components/RequireAuth'
 import Explore from './pages/Explore'
 import Messages from './pages/Messages'
+import Privacy from './pages/Privacy'
 import ProfileGate from './components/ProfileGate'
 
 function App() {
@@ -16,6 +17,8 @@ function App() {
         <Route path="/signup" element={<Auth />} />
         <Route path="/login" element={<Auth />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Public on purpose: students must be able to read this before they sign up */}
+        <Route path="/privacy" element={<Privacy />} />
         <Route
           path="/create-profile"
           element={

@@ -15,6 +15,16 @@ const AVATARS = Object.fromEntries(
 const FOOD = { veg: 'Veg', non_veg: 'Non-veg', no_preference: 'Any food' }
 const FURNISHING = { unfurnished: 'Unfurnished', semi_furnished: 'Semi-furnished', fully_furnished: 'Fully furnished' }
 const MOVE_IN = { immediate: 'Moving in now', within_month: 'Within a month', flexible: 'Flexible' }
+const GROUP = { solo: 'Solo', two: 'Two-person', three_plus: '3 or more' }
+const YEARS = { 1: 'Year 1', 2: 'Year 2', 3: 'Year 3', 4: 'Year 4' }
+
+// The state the filters start in (and return to on Reset). Budget is handled separately: it starts at the user's own maximum.
+const DEFAULT_FILTERS = {
+  locality: 'all', food: 'all', furnishing: 'all', moveIn: 'all',
+  group: 'all', year: 'all', branch: 'all', verified: false,
+}
+
+const chip = (active) => `rounded-full px-4 py-1.5 text-sm font-bold transition ${active ? 'bg-[#006d3b] text-white' : 'bg-[#d8e6dd] text-[#3d4a3f] hover:bg-[#bccabc]/50'}`
 
 // How much of the candidate's budget range fits the range [my min, B] (0..1)
 function overlapFrac(myMin, B, p) {
@@ -107,6 +117,20 @@ function Avatar({ person, size = 'h-20 w-20 rounded-2xl' }) {
   )
 }
 
+// One row of filter chips: "All" plus the given [value, label] options
+function ChipGroup({ label, value, options, onChange }) {
+  return (
+    <div className="flex flex-col gap-2 text-sm font-bold text-[#3d4a3f]">
+      {label}
+      <div className="flex flex-wrap gap-2">
+        {[['all', 'All'], ...options].map(([k, v]) => (
+          <button key={k} onClick={() => onChange(k)} className={chip(value === k)}>{v}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function Card({ row, sent, likesYou, mutual, onHello, onMessage, top, verified }) {
   const [open, setOpen] = useState(false)
   const { person, prefs, score, why, reasons } = row
@@ -119,7 +143,7 @@ function Card({ row, sent, likesYou, mutual, onHello, onMessage, top, verified }
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-xl font-extrabold tracking-tight text-[#121e18]">{person.full_name}</h3>
-            {/* Badge shows only when this person's roll number passed ID verification at sign-up */}
+            {/* Badge shows only when this person's ID was verified at sign-up */}
             {verified && (
               <span className="inline-flex items-center gap-1 rounded-full bg-[#EAFBF2] px-2.5 py-0.5 text-xs font-bold text-[#006d3b]">
                 <BadgeCheck size={14} /> Verified
@@ -202,10 +226,10 @@ function Card({ row, sent, likesYou, mutual, onHello, onMessage, top, verified }
   )
 }
 
-// roll_number is selected so the card can check it against the verified list
+// is_verified is set by the database (never by the browser) when the ID check passes
 const SELECT = `id, match_score, match_reasons, ai_explanation,
-  a:student_profiles!profile_a_id(id, roll_number, full_name, branch, year_of_study, avatar_seed, preferences(*)),
-  b:student_profiles!profile_b_id(id, roll_number, full_name, branch, year_of_study, avatar_seed, preferences(*))`
+  a:student_profiles!profile_a_id(id, is_verified, full_name, branch, year_of_study, avatar_seed, preferences(*)),
+  b:student_profiles!profile_b_id(id, is_verified, full_name, branch, year_of_study, avatar_seed, preferences(*))`
 
 export default function Explore() {
   const navigate = useNavigate()
@@ -219,11 +243,11 @@ export default function Explore() {
   const [q, setQ] = useState('')
   const [maxBudget, setMaxBudget] = useState(20000)
   const [myBudget, setMyBudget] = useState({ min: 5000, max: 20000 })
-  const [locality, setLocality] = useState('all')
-  const [food, setFood] = useState('all')
+  const [f, setF] = useState(DEFAULT_FILTERS)
   const [view, setView] = useState('best')
   const [others, setOthers] = useState([])
-  const [verifiedRolls, setVerifiedRolls] = useState(new Set()) // roll numbers that passed ID verification
+
+  const setFilter = (key, value) => setF((prev) => ({ ...prev, [key]: value }))
 
   // Latest "sent" set for the realtime handler below (avoids a stale closure)
   const sentRef = useRef(sent)
@@ -237,11 +261,10 @@ export default function Explore() {
       const { data: mine, error: e1 } = await supabase.from('student_profiles').select('id, full_name, avatar_seed, gender, preferences(*)').eq('user_id', user.id).maybeSingle()
       if (e1 || !mine) { setError('Create your profile first to see matches.'); setStatus('error'); return }
 
-      const [m, l, o, v, h] = await Promise.all([
+      const [m, l, o, h] = await Promise.all([
         supabase.from('matches').select(SELECT).or(`profile_a_id.eq.${mine.id},profile_b_id.eq.${mine.id}`),
         supabase.from('likes').select('liker_profile_id, liked_profile_id').or(`liker_profile_id.eq.${mine.id},liked_profile_id.eq.${mine.id}`),
-        supabase.from('student_profiles').select('id, roll_number, full_name, branch, year_of_study, avatar_seed, gender, preferences(*)').neq('id', mine.id),
-        supabase.from('verified_ids').select('roll_number'),
+        supabase.from('student_profiles').select('id, is_verified, full_name, branch, year_of_study, avatar_seed, gender, preferences(*)').neq('id', mine.id),
         supabase.from('hidden_profiles').select('profile_id'), // profiles hidden after repeated reports
       ])
       if (ignore) return
@@ -271,7 +294,6 @@ export default function Explore() {
       })))
       const mp = Array.isArray(mine.preferences) ? mine.preferences[0] : mine.preferences
       if (mp?.budget_max) { setMyBudget({ min: mp.budget_min, max: mp.budget_max }); setMaxBudget(mp.budget_max) }
-      setVerifiedRolls(new Set((v.data || []).map((x) => String(x.roll_number).toUpperCase())))
       setMe(mine)
       setRows(list)
       setSent(new Set(likes.filter((x) => x.liker_profile_id === mine.id).map((x) => x.liked_profile_id)))
@@ -327,7 +349,11 @@ export default function Explore() {
     if (received.has(row.person.id)) setMutual(row.person)
   }
 
-  const localities = useMemo(() => [...new Set(rows.map((r) => r.prefs.preferred_locality).filter(Boolean))].sort(), [rows])
+  // Filter options come from everyone on the page, not just the scored matches
+  const people = useMemo(() => [...rows, ...others], [rows, others])
+  const localities = useMemo(() => [...new Set(people.map((r) => r.prefs.preferred_locality).filter(Boolean))].sort(), [people])
+  const branches = useMemo(() => [...new Set(people.map((r) => r.person.branch).filter(Boolean))].sort(), [people])
+
   const myPrefs = Array.isArray(me?.preferences) ? me.preferences[0] : me?.preferences
   const adjusted = useMemo(
     () => rows.map((r) => ({ ...r, score: Math.round(r.score * (0.5 + 0.5 * budgetFactor(myBudget, maxBudget, r.prefs))) })),
@@ -352,13 +378,30 @@ export default function Explore() {
     const text = `${r.person.full_name} ${r.person.branch} ${r.prefs.preferred_locality || ''}`.toLowerCase()
     return text.includes(q.toLowerCase())
       && (r.prefs.budget_min == null || (r.prefs.budget_min <= maxBudget && r.prefs.budget_max >= Math.min(myBudget.min, maxBudget)))
-      && (locality === 'all' || r.prefs.preferred_locality === locality)
-      && (food === 'all' || r.prefs.food_preference === food)
+      && (f.locality === 'all' || r.prefs.preferred_locality === f.locality)
+      && (f.food === 'all' || r.prefs.food_preference === f.food)
+      && (f.furnishing === 'all' || r.prefs.furnishing === f.furnishing)
+      && (f.moveIn === 'all' || r.prefs.move_in_timeline === f.moveIn)
+      && (f.group === 'all' || r.prefs.group_size === f.group)
+      && (f.year === 'all' || String(r.person.year_of_study) === f.year)
+      && (f.branch === 'all' || r.person.branch === f.branch)
+      && (!f.verified || r.person.is_verified)
   })
+
+  // How many filters differ from the starting state (shown next to "Filters")
+  const activeCount =
+    Object.entries(f).filter(([k, v]) => (k === 'verified' ? v : v !== 'all')).length +
+    (maxBudget !== myBudget.max ? 1 : 0)
+
+  function resetFilters() {
+    setF(DEFAULT_FILTERS)
+    setMaxBudget(myBudget.max)
+    setQ('')
+  }
+
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const likesYouCount = rows.filter((r) => received.has(r.person.id) && !sent.has(r.person.id)).length
-  const chip = (active) => `rounded-full px-4 py-1.5 text-sm font-bold transition ${active ? 'bg-[#006d3b] text-white' : 'bg-[#d8e6dd] text-[#3d4a3f] hover:bg-[#bccabc]/50'}`
 
   return (
     <div className="min-h-screen bg-[#FFFDF8] font-['Nunito_Sans',sans-serif] text-[#121e18]">
@@ -375,30 +418,51 @@ export default function Explore() {
       </header>
 
       <main className="mx-auto grid max-w-[1280px] gap-6 px-5 py-8 sm:px-10 lg:grid-cols-[300px_1fr]">
-        <aside className="h-fit rounded-3xl bg-[#e9f7ee] p-6 lg:sticky lg:top-24">
-          <h2 className="text-lg font-extrabold text-[#006d3b]">Filters</h2>
+        <aside className="h-fit rounded-3xl bg-[#e9f7ee] p-6 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-extrabold text-[#006d3b]">Filters{activeCount > 0 ? ` (${activeCount})` : ''}</h2>
+            <button
+              onClick={resetFilters}
+              disabled={activeCount === 0 && !q}
+              className="text-sm font-bold text-[#006d3b] hover:underline disabled:no-underline disabled:opacity-40"
+            >
+              Reset
+            </button>
+          </div>
+
           <div className="mt-5 flex flex-col gap-6">
             <label className="flex flex-col gap-2 text-sm font-bold text-[#3d4a3f]">
               <span className="flex justify-between">Budget up to <span>{money(maxBudget)}</span></span>
               <input type="range" min={Math.min(4000, myBudget.min)} max={Math.max(20000, myBudget.max)} step="500" value={maxBudget} onChange={(e) => setMaxBudget(+e.target.value)} className="accent-[#006d3b]" />
               <span className="text-xs font-semibold text-[#3d4a3f]/70">Your budget: {money(myBudget.min)} – {money(myBudget.max)}. Match % shifts as you move this.</span>
             </label>
+
             <label className="flex flex-col gap-2 text-sm font-bold text-[#3d4a3f]">
               Locality
-              <select value={locality} onChange={(e) => setLocality(e.target.value)} className="rounded-2xl bg-white px-4 py-2.5 font-semibold outline-none focus:ring-2 focus:ring-[#006d3b]">
+              <select value={f.locality} onChange={(e) => setFilter('locality', e.target.value)} className="rounded-2xl bg-white px-4 py-2.5 font-semibold outline-none focus:ring-2 focus:ring-[#006d3b]">
                 <option value="all">Anywhere</option>
                 {localities.map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
             </label>
-            <div className="flex flex-col gap-2 text-sm font-bold text-[#3d4a3f]">
-              Food
-              <div className="flex flex-wrap gap-2">
-                {[['all', 'All'], ...Object.entries(FOOD)].map(([k, v]) => (
-                  <button key={k} onClick={() => setFood(k)} className={chip(food === k)}>{v}</button>
-                ))}
-              </div>
-            </div>
-            <button onClick={() => { setMaxBudget(myBudget.max); setLocality('all'); setFood('all'); setQ('') }} className="w-fit text-sm font-bold text-[#006d3b] hover:underline">Reset filters</button>
+
+            <ChipGroup label="Food" value={f.food} options={Object.entries(FOOD)} onChange={(v) => setFilter('food', v)} />
+            <ChipGroup label="Furnishing" value={f.furnishing} options={Object.entries(FURNISHING)} onChange={(v) => setFilter('furnishing', v)} />
+            <ChipGroup label="Move-in" value={f.moveIn} options={Object.entries(MOVE_IN)} onChange={(v) => setFilter('moveIn', v)} />
+            <ChipGroup label="Group size" value={f.group} options={Object.entries(GROUP)} onChange={(v) => setFilter('group', v)} />
+            <ChipGroup label="Year of study" value={f.year} options={Object.entries(YEARS)} onChange={(v) => setFilter('year', v)} />
+
+            <label className="flex flex-col gap-2 text-sm font-bold text-[#3d4a3f]">
+              Branch
+              <select value={f.branch} onChange={(e) => setFilter('branch', e.target.value)} className="rounded-2xl bg-white px-4 py-2.5 font-semibold outline-none focus:ring-2 focus:ring-[#006d3b]">
+                <option value="all">Any branch</option>
+                {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </label>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-[#3d4a3f]">
+              <input type="checkbox" checked={f.verified} onChange={(e) => setFilter('verified', e.target.checked)} className="h-4 w-4 accent-[#006d3b]" />
+              Verified students only
+            </label>
           </div>
         </aside>
 
@@ -438,7 +502,7 @@ export default function Explore() {
                 sent={sent.has(r.person.id)}
                 likesYou={received.has(r.person.id)}
                 mutual={sent.has(r.person.id) && received.has(r.person.id)}
-                verified={verifiedRolls.has(String(r.person.roll_number || '').toUpperCase())}
+                verified={!!r.person.is_verified}
                 onHello={() => sayHello(r)}
                 onMessage={() => navigate('/messages')}
               />

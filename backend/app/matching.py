@@ -1,5 +1,5 @@
 """
-Romora matching script v1.
+Romora matching script v2.
 
 Reads every profile and its preferences, then for each pair of students:
   1. HARD FILTERS (a pair that fails any of these is dropped):
@@ -8,13 +8,13 @@ Reads every profile and its preferences, then for each pair of students:
        - budget: the two budget ranges must overlap
        - move-in: same timeline, or at least one person is 'flexible'
   2. SOFT SCORE out of 100:
-       furnishing 25, food 25, locality 20, year/branch 15, budget fit 15
-     (Bio similarity from embeddings is a later, smaller factor and is not included yet.)
+       furnishing 20, food 20, locality 20, year/branch 15, budget fit 15,
+       bio similarity 10 (semantic similarity of the "About you" bios)
   3. Writes one row per surviving pair into `matches`, with a match_reasons JSON
      that the Groq explanation step will use later.
 
 Run from the backend folder with the virtual environment active:
-    python match.py
+    python app/matching.py
 
 NOTE: re-running deletes all existing matches first, which also clears any stored
 ai_explanation. Run the matching script BEFORE the Groq explanation step, and
@@ -29,6 +29,11 @@ from itertools import combinations
 from dotenv import load_dotenv
 from supabase import create_client
 
+try:  # imported by the API as app.matching
+    from app.embeddings import similarity
+except ModuleNotFoundError:  # run directly: python app/matching.py
+    from embeddings import similarity
+
 sys.stdout.reconfigure(encoding="utf-8")
 load_dotenv()
 
@@ -39,9 +44,12 @@ if not SUPABASE_URL or not SERVICE_KEY:
 
 sb = create_client(SUPABASE_URL, SERVICE_KEY)
 
-WEIGHTS = {"furnishing": 25, "food": 25,
-           "locality": 20, "year_branch": 15, "budget": 15}
+WEIGHTS = {"furnishing": 20, "food": 20, "locality": 20,
+           "year_branch": 15, "budget": 15, "bio": 10}
 FURN_ORDER = {"unfurnished": 0, "semi_furnished": 1, "fully_furnished": 2}
+
+# Cosine similarity range mapped onto 0..10 bio points (tune using python app/embeddings.py)
+BIO_LOW, BIO_HIGH = 0.52, 0.80
 
 
 def label(value: str) -> str:
@@ -70,9 +78,9 @@ def hard_filter(a: dict, b: dict):
 def score_furnishing(a, b):
     diff = abs(FURN_ORDER[a["furnishing"]] - FURN_ORDER[b["furnishing"]])
     if diff == 0:
-        return 25, f"Both prefer a {label(a['furnishing'])} place"
+        return 20, f"Both prefer a {label(a['furnishing'])} place"
     if diff == 1:
-        return 12, f"Close on furnishing ({label(a['furnishing'])} and {label(b['furnishing'])})"
+        return 10, f"Close on furnishing ({label(a['furnishing'])} and {label(b['furnishing'])})"
     return 0, "Very different furnishing needs"
 
 
@@ -80,11 +88,11 @@ def score_food(a, b):
     fa, fb = a["food_preference"], b["food_preference"]
     if fa == fb:
         if fa == "no_preference":
-            return 25, "Both are flexible about food"
-        return 25, f"Both eat {label(fa)}"
+            return 20, "Both are flexible about food"
+        return 20, f"Both eat {label(fa)}"
     if "no_preference" in (fa, fb):
-        return 20, "One of you is flexible about food"
-    return 5, "Different food habits"
+        return 16, "One of you is flexible about food"
+    return 4, "Different food habits"
 
 
 def score_locality(a, b):
@@ -121,6 +129,21 @@ def score_budget(a, b):
     return round(WEIGHTS["budget"] * ratio, 1), f"Shared budget of ₹{lo} to ₹{hi}"
 
 
+def score_bio(a, b):
+    sim = similarity(a.get("bio_raw"), b.get("bio_raw"))
+    if sim is None:
+        return WEIGHTS["bio"] * 0.5, "No bio to compare yet"
+    ratio = min(max((sim - BIO_LOW) / (BIO_HIGH - BIO_LOW), 0.0), 1.0)
+    points = round(WEIGHTS["bio"] * ratio, 1)
+    if ratio >= 0.6:
+        note = "Your bios describe a similar lifestyle and interests"
+    elif ratio >= 0.3:
+        note = "Your bios share a few themes"
+    else:
+        note = "Your bios describe quite different interests"
+    return points, note
+
+
 def score_pair(a, b):
     parts = {
         "furnishing": score_furnishing(a, b),
@@ -128,6 +151,7 @@ def score_pair(a, b):
         "locality": score_locality(a, b),
         "year_branch": score_year_branch(a, b),
         "budget": score_budget(a, b),
+        "bio": score_bio(a, b),
     }
     total = sum(points for points, _ in parts.values())
     breakdown = {
@@ -144,7 +168,7 @@ def score_pair(a, b):
 # ----------------------------------------------------------------- main
 def main() -> None:
     profiles = sb.table("student_profiles").select(
-        "id, full_name, username, gender, year_of_study, branch"
+        "id, full_name, username, gender, year_of_study, branch, bio_raw"
     ).execute().data
     prefs = sb.table("preferences").select("*").execute().data
     prefs_by_profile = {p["profile_id"]: p for p in prefs}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Mail, Lock, Eye, EyeOff, User, ShieldCheck, Info, CircleAlert, ArrowRight,
 } from "lucide-react";
@@ -251,8 +252,17 @@ function SignUpForm() {
               {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
 
-            <p className="text-center text-[10px] text-slate-400">
-              By signing up you agree to sharing your college credentials with us.
+            <p className="text-center text-[10px] leading-4 text-slate-400">
+              Your ID is used only to check your roll number and is not stored.{" "}
+              <Link
+                to="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline hover:text-slate-600"
+              >
+                See our privacy notice
+              </Link>
+              .
             </p>
           </div>
         </form>

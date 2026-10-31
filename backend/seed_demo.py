@@ -2,15 +2,19 @@
 Seed 16 fake KIIT students for the Romora demo.
 
 For each student it creates:
-  - an already-confirmed login  demoNN@kiit.ac.in  (service key, no email sent)
-  - a student_profiles row
+  - an already-confirmed login  <roll number>@kiit.ac.in  (service key, no email sent)
+  - a student_profiles row (roll number = email prefix, as the database requires)
   - a preferences row
-Then it adds one like: Rohan Rai -> Aarav Sharma, so that logging in as
-demo01@kiit.ac.in and liking Rohan back makes the match mutual live.
+  - a verified_ids row, so the demo profiles show the Verified badge
+Then it adds one like: Rohan Rai -> Aarav Sharma, so that logging in as Aarav
+(99000001@kiit.ac.in) and liking Rohan back makes the match mutual live.
 
-Safe to re-run: it first deletes earlier demo accounts (emails starting
-"demo" and ending "@kiit.ac.in"). Deleting the login cascades to the profile,
-preferences and likes. NEVER give a real account an email starting with "demo".
+Demo roll numbers are 99000001 to 99000016. They cannot be real KIIT roll numbers,
+so they never clash with a real student's sign-up.
+
+Safe to re-run: it first deletes earlier demo accounts (profiles with the demo
+usernames below, and any email starting "demo"). Deleting the login cascades to
+the profile, preferences and likes. It never deletes by roll-number range.
 
 Run from the backend folder with the virtual environment active:
     python seed_demo.py
@@ -22,6 +26,7 @@ import sys
 from dotenv import load_dotenv
 from supabase import create_client
 
+sys.stdout.reconfigure(encoding="utf-8")
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -35,6 +40,8 @@ if len(DEMO_PASSWORD) < 8:
     sys.exit("DEMO_PASSWORD must be at least 8 characters")
 
 sb = create_client(SUPABASE_URL, SERVICE_KEY)
+
+DEMO_ROLL_BASE = 99000000
 
 # (username, full_name, gender, year, branch, avatar,
 #  budget_min, budget_max, furnishing, move_in, food, group, locality, pref_gender, bio)
@@ -90,13 +97,30 @@ STUDENTS = [
 ]
 
 
+def roll_for(n: int) -> str:
+    return str(DEMO_ROLL_BASE + n)
+
+
 def email_for(n: int) -> str:
-    return f"demo{n:02d}@kiit.ac.in"
+    return f"{roll_for(n)}@kiit.ac.in"
 
 
 def delete_old_demo_accounts() -> None:
     print("Removing earlier demo accounts...")
-    removed = 0
+    usernames = [s[0] for s in STUDENTS]
+    user_ids = set()
+    old_rolls = set()
+
+    # 1) any profile that uses one of the demo usernames (covers every earlier seed style)
+    rows = sb.table("student_profiles").select(
+        "user_id, roll_number, username"
+    ).in_("username", usernames).execute().data
+    for r in rows:
+        user_ids.add(r["user_id"])
+        old_rolls.add(r["roll_number"])
+        print(f"  will remove {r['username']} ({r['roll_number']})")
+
+    # 2) old-style logins whose email starts with "demo"
     page = 1
     while True:
         res = sb.auth.admin.list_users(page=page, per_page=200)
@@ -106,22 +130,29 @@ def delete_old_demo_accounts() -> None:
         for u in users:
             email = (u.email or "").lower()
             if email.startswith("demo") and email.endswith("@kiit.ac.in"):
-                sb.auth.admin.delete_user(u.id)
-                removed += 1
+                user_ids.add(u.id)
         if len(users) < 200:
             break
         page += 1
-    print(f"  removed {removed} old demo account(s)")
+
+    for uid in user_ids:
+        sb.auth.admin.delete_user(uid)
+    if old_rolls:
+        sb.table("verified_ids").delete().in_(
+            "roll_number", list(old_rolls)).execute()
+    print(f"  removed {len(user_ids)} old demo account(s)")
 
 
 def main() -> None:
     delete_old_demo_accounts()
 
     profile_ids = {}
+    verified = []
     for n, s in enumerate(STUDENTS, start=1):
         (username, full_name, gender, year, branch, avatar,
          bmin, bmax, furnishing, move_in, food, group, locality, pref_gender, bio) = s
         email = email_for(n)
+        roll = roll_for(n)
 
         created = sb.auth.admin.create_user({
             "email": email,
@@ -133,7 +164,7 @@ def main() -> None:
 
         prof = sb.table("student_profiles").insert({
             "user_id": user_id,
-            "roll_number": f"23052{n:03d}",
+            "roll_number": roll,
             "username": username,
             "full_name": full_name,
             "year_of_study": year,
@@ -157,9 +188,15 @@ def main() -> None:
             "preferred_roommate_gender": pref_gender,
         }).execute()
 
+        verified.append({"roll_number": roll})
         print(f"  created {email}  ->  {full_name}")
 
-    # Seeded moment: Rohan already liked Aarav. Log in as demo01 and like Rohan back.
+    # Demo profiles show the Verified badge (set by this script, not by an ID upload)
+    sb.table("verified_ids").upsert(
+        verified, on_conflict="roll_number").execute()
+    print(f"Marked {len(verified)} demo profiles as verified")
+
+    # Seeded moment: Rohan already liked Aarav. Log in as Aarav and like Rohan back.
     sb.table("likes").insert({
         "liker_profile_id": profile_ids["rohan_rai"],
         "liked_profile_id": profile_ids["aarav_sharma"],
