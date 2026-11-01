@@ -4,7 +4,7 @@ import { Search, GraduationCap, Wallet, MapPin, Sparkles, ChevronDown, Heart, X,
 import { supabase } from '../supabaseClient' // change to `import supabase from ...` if yours is a default export
 import diamond from '../assets/romora_diamond.svg'
 import ProfileMenu from '../components/ProfileMenu'
-import { refreshMyMatches } from '../lib/api'
+import { refreshMyMatches, explainMyMatches } from '../lib/api' // CHANGED: explainMyMatches added
 
 // Every SVG in src/assets/avatars, keyed by file name: { rohan: '/src/assets/avatars/rohan.svg', ... }
 const AVATARS = Object.fromEntries(
@@ -325,6 +325,17 @@ export default function Explore() {
     return () => { supabase.removeChannel(channel) }
   }, [me])
 
+  // NEW: if some cards have no "Why you match" text, ask the backend once to write the missing ones.
+  // The backend ignores the request while it is already writing them for this user.
+  const explainAsked = useRef(false)
+  useEffect(() => {
+    if (status !== 'ready' || explainAsked.current) return
+    if (rows.some((r) => !r.why)) {
+      explainAsked.current = true
+      explainMyMatches()
+    }
+  }, [status, rows])
+
   // Explanations are written a few seconds after scores; pick them up as they arrive
   useEffect(() => {
     if (status !== 'ready') return
@@ -336,7 +347,7 @@ export default function Explore() {
       const { data } = await supabase.from('matches').select('id, ai_explanation').in('id', missing)
       const got = new Map((data || []).filter((x) => x.ai_explanation).map((x) => [x.id, x.ai_explanation]))
       if (got.size) setRows((rs) => rs.map((r) => (got.has(r.id) ? { ...r, why: got.get(r.id) } : r)))
-      if (tries >= 15 || got.size === missing.length) clearInterval(timer)
+      if (tries >= 30 || got.size === missing.length) clearInterval(timer) // CHANGED: waits about 2 minutes instead of 1
     }, 4000)
     return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
